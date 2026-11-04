@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-recovery-lab"
+version = "0.1.0"
+description = "Deterministic tests for agent recovery, attempt budgets, and duplicate business effects"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+authors = [{name = "Felipe Cristino"}]
+dependencies = []
+keywords = ["agents", "testing", "idempotency", "reliability", "fault-injection"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Software Development :: Testing",
+]
+
+[project.scripts]
+agent-recovery-demo = "agent_recovery.demo:main"
+
+[project.urls]
+Repository = "https://github.com/felipercmb/agent-recovery-lab"
+Issues = "https://github.com/felipercmb/agent-recovery-lab/issues"
+Documentation = "https://github.com/felipercmb/agent-recovery-lab#readme"
+
+[tool.setuptools.packages.find]
+where = ["src"]
