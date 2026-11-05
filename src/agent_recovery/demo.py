@@ -57,29 +57,29 @@ def demo_cases() -> dict[str, tuple[Scenario, Expectations]]:
     return {
         "baseline": (
             Scenario("baseline", (Reply(SUMMARY),)),
-            Expectations(1, 1, ticket),
+            Expectations(1, 1, ticket, max_effect_attempts=1),
         ),
         "rate-limit": (
             Scenario("rate-limit", (Fail("rate_limit"), Reply(SUMMARY))),
-            Expectations(2, 1, ticket),
+            Expectations(2, 1, ticket, max_effect_attempts=1),
         ),
         "outage": (
             Scenario("outage", (Fail("rate_limit"), Fail("timeout"), Fail("unavailable"))),
-            Expectations(3, 1, require_completion=False, expected_error=TransientProviderError),
+            Expectations(3, 1, require_completion=False, expected_error=TransientProviderError, max_effect_attempts=0),
         ),
         "before-commit": (
             Scenario(
                 "before-commit", (Reply(SUMMARY), Reply(SUMMARY)),
                 (Interruption("before_commit"),), max_restarts=1,
             ),
-            Expectations(2, 2, ticket),
+            Expectations(2, 2, ticket, max_effect_attempts=1),
         ),
         "after-commit": (
             Scenario(
                 "after-commit", (Reply(SUMMARY), Reply(SUMMARY)),
                 (Interruption("after_commit"),), max_restarts=1,
             ),
-            Expectations(2, 2, ticket),
+            Expectations(2, 2, ticket, max_effect_attempts=2),
         ),
     }
 
@@ -107,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
         for report in reports:
             print(f"{'PASS' if report.passed else 'FAIL'} {report.scenario}: "
                   f"provider_attempts={report.provider_attempts} runs={report.workflow_runs} "
+                  f"effect_attempts={report.effect_attempts} "
                   f"committed_effects={len(report.effects)} completed={report.completed}")
             for violation in report.violations:
                 print(f"  {violation.code}: {violation.message}")

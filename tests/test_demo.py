@@ -49,6 +49,13 @@ class DemoTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("duplicate_effect", result.stdout)
         self.assertIn("committed_effects=2", result.stdout)
+        self.assertIn("effect_attempts=2", result.stdout)
+
+    def test_text_report_distinguishes_write_attempts_from_commits(self):
+        result = self.invoke("--scenario", "after-commit")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("effect_attempts=2", result.stdout)
+        self.assertIn("committed_effects=1", result.stdout)
 
 
 if __name__ == "__main__":

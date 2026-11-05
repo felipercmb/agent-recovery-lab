@@ -26,6 +26,8 @@ The effect ledger acts as a fake external service. `commit(kind, operation_id=..
 
 `Expectations` defines what the test accepts. The expected effect counts are keyed by both effect kind and logical operation ID. Duplicate detection uses those business identifiers independently of the implementation's idempotency keys.
 
+Expected counts greater than one require `no_duplicates=False`. Otherwise the configuration could never pass: the exact count and duplicate prohibition contradict each other. Invalid configurations fail before executing the workflow.
+
 The report includes cumulative observations, violations, and a verdict. Its assertion method makes the report usable inside an existing test suite without a test-runner plugin.
 
 ## What survives a restart
@@ -50,6 +52,8 @@ The application owns retries for `TransientProviderError`. The runner owns only 
 
 Expectation budgets count the entire scenario, including all restarts. A workflow that individually stays within a per-invocation retry budget may still violate the total provider-attempt budget.
 
+The optional `max_effect_attempts` budget checks calls to the ledger, including idempotent reuse and invalid writes that reached argument validation. It is independent of committed-effect counts: three write requests may create only one effect and still exceed a budget of two. The default `None` leaves write attempts unbounded by this assertion; `0` forbids all write attempts. These budgets are evaluated in the report, not used to interrupt execution. Calls blocked by `max_operations` do not reach the provider or ledger and do not increment their attempt counters.
+
 An injected interruption inherits from `BaseException` so an application's ordinary `except Exception` retry handler does not turn a simulated worker stop into a recoverable provider error. The runner handles that harness signal. Application code should not catch `BaseException` broadly.
 
 These are cooperative Python interruptions: `finally` blocks and context-manager cleanup still run, unlike a hard process kill. Suppressing or replacing an interruption before it reaches the supervisor is an integrity failure, even if the workflow returns successfully. Use a process-level integration test for actual crash semantics.
@@ -67,6 +71,8 @@ The operation limit is a separate cooperative safety fuse. It counts calls into 
 Outcomes are scripted; there is no random fault probability, real backoff sleep, external model, or network call. This keeps failures reproducible and allows the core suite to run using only the Python standard library.
 
 `arun` lets an asynchronous workflow use the same observations and assertions. It does not model scheduling races, multiple concurrent workers, simultaneous commits, task cancellation, or real asynchronous provider transports. The synchronous fake operations are deliberate boundaries for this MVP.
+
+Calling a generator or async-generator function only creates an iterator; it does not execute the workflow body. The runners reject these unsupported workflow shapes with a sticky `generator_workflow` integrity violation. Consume generators inside a regular or async workflow and return a concrete result. Awaitable generator-based coroutines remain supported by `arun`.
 
 ## Limits of the evidence
 

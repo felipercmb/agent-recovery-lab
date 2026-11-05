@@ -372,6 +372,21 @@ class RecoveryTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_repeated_effect_count_requires_explicit_duplicate_opt_out(self):
+        effect = ExpectedEffect("ticket", "request-42", count=2)
+        with self.assertRaisesRegex(ValueError, "no_duplicates=False"):
+            Expectations(0, 1, effects=(effect,))
+
+        def workflow(ctx):
+            ctx.effects.commit("ticket", operation_id="request-42")
+            ctx.effects.commit("ticket", operation_id="request-42")
+
+        report = run(
+            Scenario("intentional repeated effects"), workflow,
+            Expectations(0, 1, effects=(effect,), no_duplicates=False),
+        )
+        report.assert_ok()
+
     def test_invalid_configuration_fails_before_execution(self):
         cases = (
             lambda: Scenario(" "),

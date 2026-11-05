@@ -101,10 +101,13 @@ class Expectations:
     require_faults_exercised: bool = True
     allow_unexpected_effects: bool = False
     expected_error: type[Exception] | None = None
+    max_effect_attempts: int | None = None
 
     def __post_init__(self) -> None:
         _nonnegative("max_provider_attempts", self.max_provider_attempts)
         _nonnegative("max_workflow_runs", self.max_workflow_runs, positive=True)
+        if self.max_effect_attempts is not None:
+            _nonnegative("max_effect_attempts", self.max_effect_attempts)
         object.__setattr__(self, "effects", tuple(self.effects))
         if not all(isinstance(effect, ExpectedEffect) for effect in self.effects):
             raise TypeError("effects must contain ExpectedEffect objects")
@@ -114,6 +117,8 @@ class Expectations:
         for name in ("require_completion", "no_duplicates", "require_faults_exercised", "allow_unexpected_effects"):
             if type(getattr(self, name)) is not bool:
                 raise TypeError(f"{name} must be a boolean")
+        if self.no_duplicates and any(effect.count > 1 for effect in self.effects):
+            raise ValueError("Expected effect counts above 1 require no_duplicates=False")
         if self.expected_error is not None:
             if not isinstance(self.expected_error, type) or not issubclass(self.expected_error, Exception):
                 raise TypeError("expected_error must be an Exception subclass")
@@ -357,6 +362,12 @@ def _report(
         "workflow_runs",
         f"Expected at most {expectations.max_workflow_runs}; got {state.workflow_runs}",
     )
+    if expectations.max_effect_attempts is not None:
+        check(
+            state.effect_attempts <= expectations.max_effect_attempts,
+            "effect_attempts",
+            f"Expected at most {expectations.max_effect_attempts}; got {state.effect_attempts} across all runs",
+        )
     counts = Counter((effect.kind, effect.operation_id) for effect in state.effects)
     if expectations.no_duplicates:
         for (kind, operation_id), count in sorted(counts.items()):
@@ -412,6 +423,11 @@ def run(scenario: Scenario, workflow: Callable[[Context], Any], expectations: Ex
                 if inspect.iscoroutine(result):
                     result.close()
                 state.invalid("async_workflow", "Use arun() for an async workflow")
+            if inspect.isgenerator(result) or inspect.isasyncgen(result):
+                state.invalid(
+                    "generator_workflow",
+                    "Generator workflows are not executed; consume the generator inside a workflow that returns a result",
+                )
             state.event("workflow_completed", "complete")
             return _report(state, expectations, True, result, None)
         except _WorkflowInterrupted as exc:
@@ -436,6 +452,11 @@ async def arun(
         try:
             pending = workflow(Context(state))
             if not inspect.isawaitable(pending):
+                if inspect.isgenerator(pending) or inspect.isasyncgen(pending):
+                    state.invalid(
+                        "generator_workflow",
+                        "Generator workflows are not executed; consume the generator inside an async workflow",
+                    )
                 state.invalid("sync_workflow", "Use run() for a synchronous workflow")
             result = await pending
             state.event("workflow_completed", "complete")
