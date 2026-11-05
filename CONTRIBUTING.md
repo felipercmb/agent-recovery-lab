@@ -13,6 +13,8 @@ PYTHONPATH=src python -m agent_recovery.demo
 
 You can optionally install the checkout with `python -m pip install -e .`. Package-building tools may need to be downloaded by pip; running from source does not require them.
 
+Run `bash scripts/verify.sh` for the suite and safe/unsafe JSON controls. To check a non-editable installation as CI does, run `python -m pip install .` followed by `PYTHON_BIN=python bash scripts/verify.sh --installed`. That mode removes `PYTHONPATH`, checks the typing marker, and exercises the installed console command. See [validation instructions](docs/validation.md) for an isolated wheel installation.
+
 Before proposing a change, run the tests and both sides of the duplicate-ticket example:
 
 ```bash

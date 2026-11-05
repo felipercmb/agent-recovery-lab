@@ -78,6 +78,7 @@ report = run(
         max_provider_attempts=2,
         max_workflow_runs=2,
         effects=(ExpectedEffect("ticket", "request-42"),),
+        max_effect_attempts=2,
     ),
 )
 
@@ -91,12 +92,41 @@ Remove `idempotency_key` and the same test fails: two effects were committed for
 
 Use `await arun(scenario, workflow, expectations)` for an asynchronous workflow. The deterministic provider, ledger, and checkpoints remain synchronous in both runners.
 
+Workflows must execute their work before returning: generator and async-generator functions are rejected with `generator_workflow`, because calling them does not execute their bodies. Consume a generator inside a regular or async workflow if needed.
+
+## Bound write retries, even with idempotency
+
+A stable key prevents duplicate commits in the fake service, but a retry loop can still send too many write requests. Set `max_effect_attempts` to check every ledger call across the entire scenario, including restarts and idempotent reuse:
+
+```python
+from agent_recovery import ExpectedEffect, Expectations, Scenario, run
+
+
+def excessive_retries(ctx):
+    for _ in range(3):
+        ctx.effects.commit("ticket", operation_id="request-42", idempotency_key="request-42")
+
+
+report = run(
+    Scenario("too many write attempts"),
+    excessive_retries,
+    Expectations(0, 1, effects=(ExpectedEffect("ticket", "request-42"),), max_effect_attempts=2),
+)
+
+assert len(report.effects) == 1
+assert report.effect_attempts == 3
+assert not report.passed
+assert [violation.code for violation in report.violations] == ["effect_attempts"]
+```
+
+Omitting this optional budget preserves the existing behavior. Use `0` for a workflow that must not attempt writes. Like the provider and workflow budgets, it is a post-run assertion; it does not stop execution. `Scenario.max_operations` remains the separate cooperative execution limit.
+
 ## What the harness checks
 
 | Concern | What is measured |
 | --- | --- |
 | Completion | Whether the workflow returned successfully after any configured restarts |
-| Attempt limits | Total provider calls and workflow invocations across the entire scenario |
+| Attempt limits | Total provider calls, workflow invocations, and optionally write attempts across the entire scenario |
 | Expected effects | The committed count for each `(kind, operation_id)` pair |
 | Duplicates | More than one committed effect for the same logical operation |
 | Unexpected effects | Effects absent from the declared expectations, rejected by default |
@@ -104,6 +134,8 @@ Use `await arun(scenario, workflow, expectations)` for an asynchronous workflow.
 | Harness integrity | Script exhaustion, invalid instrumentation, and the cooperative operation limit |
 
 `report.passed` is a Boolean verdict. `report.assert_ok()` raises an assertion failure suitable for `unittest` or a normal pytest test. `report.to_dict()` provides a JSON-compatible report for CI artifacts. Reports describe only the scenario that ran; they are not a production reliability score.
+
+The CLI text shows `effect_attempts` separately from `committed_effects`. GitHub Actions checks the safe and deliberately unsafe examples on Python 3.11–3.14 and attaches their JSON reports to each run. See [validation instructions](docs/validation.md) to reproduce the checks locally.
 
 ## Deterministic scenarios
 
